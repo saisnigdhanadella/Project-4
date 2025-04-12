@@ -40,7 +40,7 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Stmt visitExprStmt(Expression stmt) {
-        return new Expression(stmt.expr.accept(this));
+        return new Stmt.Expression(stmt.expr.accept(this));
     }
 
     @Override
@@ -50,57 +50,67 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Stmt visitBlockStmt(Block stmt) {
-        ArrayList<Stmt> newStmts = new ArrayList<>();
-        for (Stmt s : stmt.statements) {
-            newStmts.add(s.accept(this));
+        ArrayList<Stmt> new_statements = new ArrayList<>();
+        for (Stmt old_state : stmt.statements) {
+            new_statements.add(old_state.accept(this));
         }
-        return new Block(newStmts);
+        return new Block(new_statements);
     }
 
     @Override
     public Stmt visitIfStmt(If stmt) {
-        Stmt newElse = (stmt.elseBranch == null) ? null : stmt.elseBranch.accept(this);
-        return new If(stmt.cond.accept(this), stmt.thenBranch.accept(this), newElse);
+        Stmt new_else;
+        if (stmt.elseBranch == null) {
+            new_else = null;
+        } else {
+            new_else = stmt.elseBranch.accept(this);
+        }
+
+        return new If(stmt.cond.accept(this),
+            stmt.thenBranch.accept(this),
+            new_else);
     }
 
     @Override
     public Stmt visitWhileStmt(While stmt) {
-        return new While(stmt.cond.accept(this), stmt.body.accept(this));
+        return new While(stmt.cond.accept(this),
+            stmt.body.accept(this));
     }
 
     @Override
-    public Stmt visitForStmt(For stmt) {
-        Stmt init = stmt.init == null ? null : new Expression(stmt.init.accept(this));
-        Expr cond = stmt.cond == null ? new Literal(true) : stmt.cond.accept(this);
-        Stmt incr = stmt.incr == null ? null : new Expression(stmt.incr.accept(this));
+    public Stmt visitForStmt(Stmt.For stmt) {
+        Stmt init = stmt.init == null ? null : new Stmt.Expression(stmt.init.accept(this));
+        Expr cond = stmt.cond == null ? new Expr.Literal(true) : stmt.cond.accept(this);
+        Stmt update = stmt.incr == null ? null : new Stmt.Expression(stmt.incr.accept(this));
         Stmt body = stmt.body.accept(this);
-
-        if (incr != null) {
-            List<Stmt> newBody = new ArrayList<>();
-            newBody.add(body);
-            newBody.add(incr);
-            body = new Block(newBody);
+    
+        if (update != null) {
+            List<Stmt> bodyStmts = new ArrayList<>();
+            bodyStmts.add(body);
+            bodyStmts.add(update);
+            body = new Stmt.Block(bodyStmts);
         }
-
-        Stmt whileLoop = new While(cond, body);
-
+    
+        Stmt whileLoop = new Stmt.While(cond, body);
+    
         if (init != null) {
-            List<Stmt> block = new ArrayList<>();
-            block.add(init);
-            block.add(whileLoop);
-            return new Block(block);
+            List<Stmt> blockStmts = new ArrayList<>();
+            blockStmts.add(init);
+            blockStmts.add(whileLoop);
+            return new Stmt.Block(blockStmts);
         }
-
+    
         return whileLoop;
     }
 
     @Override
     public Stmt visitFunctionStmt(Function stmt) {
-        List<Stmt> body = new ArrayList<>();
-        for (Stmt s : stmt.body) {
-            body.add(s.accept(this));
+        ArrayList<Stmt> new_body = new ArrayList<>();
+        for (Stmt old_statement : stmt.body) {
+            new_body.add(old_statement.accept(this));
         }
-        return new Function(stmt.name, stmt.params, body);
+
+        return new Function(stmt.name, stmt.params, new_body);
     }
 
     @Override
@@ -140,17 +150,18 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Expr visitConditionalExpr(Conditional expr) {
-        return new Conditional(expr.cond.accept(this),
-                expr.thenBranch.accept(this),
-                expr.elseBranch.accept(this));
+        return new Conditional(expr.cond.accept(this), 
+            expr.thenBranch.accept(this),
+            expr.elseBranch.accept(this));
     }
 
     @Override
     public Expr visitCallExpr(Call expr) {
-        List<Expr> args = new ArrayList<>();
+        ArrayList<Expr> new_args = new ArrayList<>();
         for (Expr arg : expr.args) {
-            args.add(arg.accept(this));
+            new_args.add(arg.accept(this));
         }
-        return new Call(expr.callee.accept(this), expr.paren, args);
+
+        return new Call(expr.callee.accept(this), expr.paren, new_args);
     }
 }

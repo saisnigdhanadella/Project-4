@@ -2,6 +2,7 @@ package simplf;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import simplf.Expr.Assign;
 import simplf.Expr.Binary;
 import simplf.Expr.Call;
@@ -39,7 +40,7 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Stmt visitExprStmt(Expression stmt) {
-        return new Stmt.Expression(stmt.expr.accept(this));
+        return new Expression(stmt.expr.accept(this));
     }
 
     @Override
@@ -49,25 +50,17 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Stmt visitBlockStmt(Block stmt) {
-        ArrayList<Stmt> new_statements = new ArrayList<>();
-        for (Stmt old_state : stmt.statements) {
-            new_statements.add(old_state.accept(this));
+        ArrayList<Stmt> newStmts = new ArrayList<>();
+        for (Stmt s : stmt.statements) {
+            newStmts.add(s.accept(this));
         }
-        return new Block(new_statements);
+        return new Block(newStmts);
     }
 
     @Override
     public Stmt visitIfStmt(If stmt) {
-        Stmt new_else;
-        if (stmt.elseBranch == null) {
-            new_else = null;
-        } else {
-            new_else = stmt.elseBranch.accept(this);
-        }
-
-        return new If(stmt.cond.accept(this),
-                stmt.thenBranch.accept(this),
-                new_else);
+        Stmt newElse = (stmt.elseBranch == null) ? null : stmt.elseBranch.accept(this);
+        return new If(stmt.cond.accept(this), stmt.thenBranch.accept(this), newElse);
     }
 
     @Override
@@ -77,35 +70,37 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Stmt visitForStmt(For stmt) {
-        // for (init; cond; incr) body;
-        // becomes:
-        // {
-        //     init;
-        //     while (cond) {
-        //         body;
-        //         incr;
-        //     }
-        // }
+        Stmt init = stmt.init == null ? null : new Expression(stmt.init.accept(this));
+        Expr cond = stmt.cond == null ? new Literal(true) : stmt.cond.accept(this);
+        Stmt incr = stmt.incr == null ? null : new Expression(stmt.incr.accept(this));
+        Stmt body = stmt.body.accept(this);
 
-        Stmt initStmt = new Expression(stmt.init);
-        Expr condExpr = stmt.cond;
-        Expr incrExpr = stmt.incr;
+        if (incr != null) {
+            List<Stmt> newBody = new ArrayList<>();
+            newBody.add(body);
+            newBody.add(incr);
+            body = new Block(newBody);
+        }
 
-        Stmt body = stmt.body;
-        body = new Block(List.of(body, new Expression(incrExpr)));
+        Stmt whileLoop = new While(cond, body);
 
-        Stmt whileLoop = new While(condExpr, body);
-        return new Block(List.of(initStmt, whileLoop));
+        if (init != null) {
+            List<Stmt> block = new ArrayList<>();
+            block.add(init);
+            block.add(whileLoop);
+            return new Block(block);
+        }
+
+        return whileLoop;
     }
 
     @Override
     public Stmt visitFunctionStmt(Function stmt) {
-        ArrayList<Stmt> new_body = new ArrayList<>();
-        for (Stmt old_statement : stmt.body) {
-            new_body.add(old_statement.accept(this));
+        List<Stmt> body = new ArrayList<>();
+        for (Stmt s : stmt.body) {
+            body.add(s.accept(this));
         }
-
-        return new Function(stmt.name, stmt.params, new_body);
+        return new Function(stmt.name, stmt.params, body);
     }
 
     @Override
@@ -152,11 +147,10 @@ public class Desugar implements Expr.Visitor<Expr>, Stmt.Visitor<Stmt> {
 
     @Override
     public Expr visitCallExpr(Call expr) {
-        ArrayList<Expr> new_args = new ArrayList<>();
+        List<Expr> args = new ArrayList<>();
         for (Expr arg : expr.args) {
-            new_args.add(arg.accept(this));
+            args.add(arg.accept(this));
         }
-
-        return new Call(expr.callee.accept(this), expr.paren, new_args);
+        return new Call(expr.callee.accept(this), expr.paren, args);
     }
 }

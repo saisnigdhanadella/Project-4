@@ -1,4 +1,4 @@
-package simplf;
+package simplf; 
 
 import java.util.List;
 import simplf.Stmt.For;
@@ -19,33 +19,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         }
     }
 
-    protected Object execute(Stmt stmt) {
-        return stmt.accept(this);
-    }
-
-    private Object evaluate(Expr expr) {
-        return expr.accept(this);
-    }
-
-    Object executeBlock(List<Stmt> statements, Environment newEnv) {
-        Environment previous = this.environment;
-        try {
-            this.environment = newEnv;
-            for (Stmt stmt : statements) {
-                execute(stmt);
-            }
-        } finally {
-            this.environment = previous;
-        }
-        return null;
-    }
-
     @Override
     public Object visitExprStmt(Stmt.Expression stmt) {
-        Object val = evaluate(stmt.expr);
-        if (environment != globals) {
-            throw new Return(val);
-        }
+        evaluate(stmt.expr);
         return null;
     }
 
@@ -68,8 +44,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitBlockStmt(Stmt.Block stmt) {
-        Environment newEnv = new Environment(environment);
-        return executeBlock(stmt.statements, newEnv);
+        Environment previous = this.environment;
+        try {
+            this.environment = new Environment(previous);
+            for (Stmt s : stmt.statements) {
+                execute(s);
+            }
+        } finally {
+            this.environment = previous;
+        }
+        return null;
     }
 
     @Override
@@ -81,7 +65,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         }
         return null;
     }
-
+    
     @Override
     public Object visitWhileStmt(Stmt.While stmt) {
         while (isTruthy(evaluate(stmt.cond))) {
@@ -92,44 +76,26 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
 
     @Override
     public Object visitForStmt(For stmt) {
+        //throw new UnsupportedOperationException("For loops are not interpreted.");
         return null;
     }
 
-    @Override
-    public Object visitFunctionStmt(Stmt.Function stmt) {
-        SimplfFunction function = new SimplfFunction(stmt, environment);
-        environment = environment.define(stmt.name, stmt.name.lexeme, function);
-        return null;
-    }
-
-    @Override
-    public Object visitCallExpr(Expr.Call expr) {
-        Object callee = evaluate(expr.callee);
-        List<Object> arguments = new java.util.ArrayList<>();
-        for (Expr argument : expr.args) {
-            arguments.add(evaluate(argument));
-        }
-
-        if (!(callee instanceof SimplfCallable)) {
-            throw new RuntimeError(expr.paren, "Can only call functions.");
-        }
-
-        SimplfCallable function = (SimplfCallable) callee;
-        if (arguments.size() != function.arity()) {
-            throw new RuntimeError(expr.paren,
-                "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
-        }
-
-        return function.call(this, arguments);
-    }
+   @Override
+public Object visitFunctionStmt(Stmt.Function stmt) {
+    SimplfFunction function = new SimplfFunction(stmt, environment);
+    environment = environment.define(stmt.name, stmt.name.lexeme, function);
+    return null;
+}
 
     @Override
     public Object visitLogicalExpr(Expr.Logical expr) {
         Object left = evaluate(expr.left);
         if (expr.op.type == TokenType.OR) {
-            if (isTruthy(left)) return left;
+            if (isTruthy(left))
+                return left;
         } else {
-            if (!isTruthy(left)) return left;
+            if (!isTruthy(left))
+                return left;
         }
         return evaluate(expr.right);
     }
@@ -179,8 +145,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
             case COMMA:
                 return right;
             default:
-                return null;
+                break;
         }
+        return null;
     }
 
     @Override
@@ -193,8 +160,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
             case BANG:
                 return !isTruthy(right);
             default:
-                return null;
+                break;
         }
+        return null;
     }
 
     @Override
@@ -213,6 +181,33 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
     }
 
     @Override
+public Object visitCallExpr(Expr.Call expr) {
+    Object callee = evaluate(expr.callee);
+
+    List<Object> arguments = new java.util.ArrayList<>();
+    for (Expr argument : expr.args) {
+        arguments.add(evaluate(argument));
+    }
+
+    if (!(callee instanceof SimplfCallable)) {
+        throw new RuntimeError(expr.paren, "Can only call functions.");
+    }
+
+    SimplfCallable function = (SimplfCallable) callee;
+
+    if (arguments.size() != function.arity()) {
+        throw new RuntimeError(expr.paren,
+            "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
+    }
+
+    return function.call(this, arguments);
+}
+
+    private Object evaluate(Expr expr) {
+        return expr.accept(this);
+    }
+
+    @Override
     public Object visitAssignExpr(Expr.Assign expr) {
         Object value = evaluate(expr.value);
         environment.assign(expr.name, value);
@@ -228,45 +223,48 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Object> {
         }
     }
 
+    protected Object execute(Stmt stmt) {
+        return stmt.accept(this);
+    }
+
     private boolean isTruthy(Object object) {
-        if (object == null) return false;
-        if (object instanceof Boolean) return (boolean) object;
+        if (object == null) {
+            return false;
+        }
+        if (object instanceof Boolean) {
+            return (boolean) object;
+        }
         return true;
     }
 
     private boolean isEqual(Object a, Object b) {
-        if (a == null) return b == null;
+        if (a == null)
+            return b == null;
         return a.equals(b);
     }
 
     private void checkNumber(Token op, Object object) {
-        if (!(object instanceof Double)) {
-            throw new RuntimeError(op, "Operand must be a number");
-        }
+        if (object instanceof Double)
+            return;
+        throw new RuntimeError(op, "Operand must be a number");
     }
 
     private void checkNumbers(Token op, Object a, Object b) {
-        if (!(a instanceof Double && b instanceof Double)) {
-            throw new RuntimeError(op, "Operands must be numbers");
-        }
+        if (a instanceof Double && b instanceof Double)
+            return;
+        throw new RuntimeError(op, "Operand must be numbers");
     }
 
     private String stringify(Object object) {
-        if (object == null) return "nil";
+        if (object == null)
+            return "nil";
         if (object instanceof Double) {
             String num = object.toString();
-            return num.endsWith(".0") ? num.substring(0, num.length() - 2) : num;
+            if (num.endsWith(".0")) {
+                num = num.substring(0, num.length() - 2);
+            }
+            return num;
         }
         return object.toString();
-    }
-}
-
-
-class Return extends RuntimeException {
-    final Object value;
-
-    Return(Object value) {
-        super(null, null, false, false);
-        this.value = value;
     }
 }

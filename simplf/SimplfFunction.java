@@ -16,7 +16,7 @@ class SimplfFunction implements SimplfCallable {
         Environment functionEnv = new Environment(closure);
         for (int i = 0; i < declaration.params.size(); i++) {
             Token param = declaration.params.get(i);
-            functionEnv.define(param, param.lexeme, args.get(i));
+            functionEnv = functionEnv.define(param, param.lexeme, args.get(i));
         }
 
         try {
@@ -32,5 +32,9 @@ class SimplfFunction implements SimplfCallable {
     public String toString() {
         return "<fn " + declaration.name.lexeme + ">";
     }
-}
 
+    @Override
+    public int arity() {
+        return declaration.params.size();
+    }
+}
